@@ -6,6 +6,7 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "lint:staged": "lint-staged",
+    "commitlint": "commitlint --edit",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
@@ -23,6 +24,8 @@
     ]
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
     "prettier": "^3.2.5",
     "turbo": "^2.8.21"
   },
