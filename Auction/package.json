@@ -1,0 +1,30 @@
+{
+  "name": "with-vue-nuxt",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "lint:staged": "lint-staged",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "lint-staged": {
+    "apps/web/**/*.{js,ts,vue}": [
+      "pnpm --filter web exec eslint --fix",
+      "pnpm exec prettier --write"
+    ],
+    "apps/api/**/*.{js,ts}": [
+      "pnpm --filter api exec eslint --fix",
+      "pnpm exec prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "pnpm exec prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "turbo": "^2.8.21"
+  },
+  "packageManager": "pnpm@8.15.6"
+}
