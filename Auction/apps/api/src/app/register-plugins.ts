@@ -1,17 +1,14 @@
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import jwt from "@fastify/jwt";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { AppEnv } from "../config/env.js";
 
-import type { FastifyInstance } from "fastify";
-
-import type { AppEnv } from "../config/env";
-
-export const registerPlugins = async (
-  app: FastifyInstance,
-  env: AppEnv,
-) => {
+export const registerPlugins = async (app: FastifyInstance, env: AppEnv) => {
   await app.register(helmet);
 
   await app.register(rateLimit, {
@@ -21,14 +18,42 @@ export const registerPlugins = async (
 
   await app.register(cors, {
     origin: env.CORS_ORIGIN,
-    credentials: false,
+    credentials: true,
   });
+
+  await app.register(cookie);
+
+  await app.register(jwt, {
+    secret: env.JWT_ACCESS_SECRET,
+  });
+
+  app.decorate(
+    "authenticate",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.code(401).send({
+          message: "Unauthorized",
+        });
+      }
+    },
+  );
 
   await app.register(swagger, {
     openapi: {
       info: {
         title: "Auction API",
-        version: "0.1.0",
+        version: "0.1.1",
+      },
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: "http",
+            scheme: "bearer",
+            bearerFormat: "JWT",
+          },
+        },
       },
     },
   });

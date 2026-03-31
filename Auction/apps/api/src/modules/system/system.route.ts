@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 
-import { healthResponseSchema } from "./system.schema";
-import { getHealthStatus } from "./system.service";
+import { healthResponseSchema } from "./system.schema.js";
+import { getHealthStatus } from "./system.service.js";
 
 export const systemRoutes = async (app: FastifyInstance) => {
   app.get(
