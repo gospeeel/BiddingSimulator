@@ -12,11 +12,16 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: Auction/apps/api
+        working-directory: Auction
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.6
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -25,16 +30,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: Auction/pnpm-lock.yaml
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 8.15.6
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: pnpm exec tsc --noEmit
+        run: pnpm --filter api exec tsc --noEmit
 
       - name: Run tests
-        run: pnpm test
+        run: pnpm --filter api test
