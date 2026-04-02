@@ -13,6 +13,7 @@ vi.mock("../../src/modules/auth/auth.service.js", () => ({
     refresh: vi.fn(),
     logout: vi.fn(),
     me: vi.fn(),
+    generateAdminKey: vi.fn(),
   },
 }));
 
@@ -150,5 +151,60 @@ describe("Auth flow (smoke)", () => {
     expect(authService.refresh).toHaveBeenCalledTimes(1);
     expect(authService.me).toHaveBeenCalledTimes(1);
     expect(authService.logout).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Admin registration flow (smoke)", () => {
+  it("generates key and registers admin", async () => {
+    vi.mocked(authService.generateAdminKey).mockResolvedValue({
+      key: "adm_test-admin-key",
+    });
+    vi.mocked(authService.register).mockResolvedValue({
+      user: { ...mockUser, role: "ADMIN" as const },
+      refreshToken: "admin-refresh-token",
+    });
+
+    const genRes = await app.inject({
+      method: "POST",
+      url: "/auth/admin/generate-key",
+      payload: { masterKey: "test-master-key" },
+    });
+    expect(genRes.statusCode).toBe(200);
+    expect((genRes.json() as any).key).toBe("adm_test-admin-key");
+
+    const regRes = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: {
+        email: "admin@example.com",
+        password: "adminpass123",
+        adminKey: "adm_test-admin-key",
+      },
+    });
+    expect(regRes.statusCode).toBe(201);
+    const body = regRes.json() as any;
+    expect(body.user.role).toBe("ADMIN");
+  });
+
+  it("generates key with ADMIN JWT", async () => {
+    vi.mocked(authService.generateAdminKey).mockResolvedValue({
+      key: "adm_existing-admin-key",
+    });
+
+    const token = await app.jwt.sign({
+      sub: "admin-123",
+      email: "admin@example.com",
+      role: "ADMIN",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/admin/generate-key",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect((response.json() as any).key).toBe("adm_existing-admin-key");
   });
 });

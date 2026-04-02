@@ -4,7 +4,11 @@ import { authRepository } from "../auth.repository.js";
 import argon2 from "argon2";
 import type { FastifyInstance } from "fastify";
 import type { AppEnv } from "../../../config/env.js";
-import { dbUser, dbRefreshSession } from "../../../tests/factories.js";
+import {
+  dbUser,
+  dbRefreshSession,
+  dbAdminInviteKey,
+} from "../../../tests/factories.js";
 
 vi.mock("../auth.repository.js", () => ({
   authRepository: {
@@ -16,6 +20,9 @@ vi.mock("../auth.repository.js", () => ({
     revokeRefreshSession: vi.fn(),
     revokeRefreshFamily: vi.fn(),
     rotateRefreshSession: vi.fn(),
+    createInviteKey: vi.fn(),
+    findInviteKey: vi.fn(),
+    markInviteKeyUsed: vi.fn(),
   },
 }));
 
@@ -69,6 +76,7 @@ describe("authService.register", () => {
       email: "test@example.com",
       passwordHash: "hashed-password",
       name: "Test User",
+      role: "USER",
     });
     expect(result.user.email).toBe("test@example.com");
     expect(result.user.name).toBe("Test User");
@@ -93,6 +101,7 @@ describe("authService.register", () => {
       email: "test@example.com",
       passwordHash: "hashed-password",
       name: undefined,
+      role: "USER",
     });
     expect(result.user.name).toBeNull();
   });
@@ -113,6 +122,87 @@ describe("authService.register", () => {
         password: "password123",
       }),
     ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("creates admin user with valid invite key", async () => {
+    const adminUser = dbUser({ role: "ADMIN" });
+    const inviteKey = dbAdminInviteKey();
+
+    vi.mocked(authRepository.findUserByEmail).mockResolvedValue(null);
+    vi.mocked(authRepository.findInviteKey).mockResolvedValue(inviteKey as any);
+    vi.mocked(authRepository.createUser).mockResolvedValue(adminUser);
+    vi.mocked(authRepository.createRefreshSession).mockResolvedValue(
+      dbRefreshSession(),
+    );
+    vi.mocked(authRepository.markInviteKeyUsed).mockResolvedValue({} as any);
+
+    const result = await authService.register(mockApp, mockEnv, {
+      email: "admin@example.com",
+      password: "password123",
+      adminKey: "adm_valid-key-for-testing",
+    });
+
+    expect(authRepository.findInviteKey).toHaveBeenCalledWith(
+      "adm_valid-key-for-testing",
+    );
+    expect(authRepository.createUser).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "ADMIN" }),
+    );
+    expect(authRepository.markInviteKeyUsed).toHaveBeenCalledWith(
+      "adm_valid-key-for-testing",
+      "admin@example.com",
+    );
+    expect(result.user.role).toBe("ADMIN");
+  });
+
+  it("throws 403 with used invite key", async () => {
+    const usedKey = dbAdminInviteKey({ used: true });
+    vi.mocked(authRepository.findUserByEmail).mockResolvedValue(null);
+    vi.mocked(authRepository.findInviteKey).mockResolvedValue(usedKey as any);
+
+    await expect(
+      authService.register(mockApp, mockEnv, {
+        email: "admin@example.com",
+        password: "password123",
+        adminKey: "adm_used-key",
+      }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    expect(authRepository.createUser).not.toHaveBeenCalled();
+  });
+
+  it("throws 403 with nonexistent invite key", async () => {
+    vi.mocked(authRepository.findUserByEmail).mockResolvedValue(null);
+    vi.mocked(authRepository.findInviteKey).mockResolvedValue(null);
+
+    await expect(
+      authService.register(mockApp, mockEnv, {
+        email: "admin@example.com",
+        password: "password123",
+        adminKey: "adm_nonexistent",
+      }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    expect(authRepository.createUser).not.toHaveBeenCalled();
+  });
+
+  it("creates regular user without invite key", async () => {
+    vi.mocked(authRepository.findUserByEmail).mockResolvedValue(null);
+    vi.mocked(authRepository.createUser).mockResolvedValue(testUser);
+    vi.mocked(authRepository.createRefreshSession).mockResolvedValue(
+      dbRefreshSession(),
+    );
+
+    const result = await authService.register(mockApp, mockEnv, {
+      email: "user@example.com",
+      password: "password123",
+    });
+
+    expect(authRepository.findInviteKey).not.toHaveBeenCalled();
+    expect(authRepository.createUser).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "USER" }),
+    );
+    expect(result.user.role).toBe("USER");
   });
 });
 
@@ -325,5 +415,65 @@ describe("authService.me", () => {
     await expect(authService.me(mockApp, "nonexistent")).rejects.toThrow(
       "User not found",
     );
+  });
+});
+
+describe("authService.generateAdminKey", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const envWithMasterKey: AppEnv = {
+    ...mockEnv,
+    ADMIN_MASTER_KEY: "test-master-key",
+  };
+
+  it("generates key with valid masterKey", async () => {
+    vi.mocked(authRepository.createInviteKey).mockResolvedValue({
+      key: "adm_test123",
+    } as any);
+
+    const result = await authService.generateAdminKey(envWithMasterKey, {
+      masterKey: "test-master-key",
+    });
+
+    expect(result.key).toBeDefined();
+    expect(result.key.startsWith("adm_")).toBe(true);
+    expect(authRepository.createInviteKey).toHaveBeenCalled();
+  });
+
+  it("generates key with ADMIN jwt role", async () => {
+    vi.mocked(authRepository.createInviteKey).mockResolvedValue({
+      key: "adm_test123",
+    } as any);
+
+    const result = await authService.generateAdminKey(envWithMasterKey, {
+      jwtRole: "ADMIN",
+    });
+
+    expect(result.key).toBeDefined();
+    expect(authRepository.createInviteKey).toHaveBeenCalled();
+  });
+
+  it("throws 403 with invalid masterKey", async () => {
+    await expect(
+      authService.generateAdminKey(envWithMasterKey, {
+        masterKey: "wrong-key",
+      }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it("throws 403 with no auth at all", async () => {
+    await expect(
+      authService.generateAdminKey(envWithMasterKey, {}),
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it("throws 403 with USER jwt role and no masterKey", async () => {
+    await expect(
+      authService.generateAdminKey(envWithMasterKey, {
+        jwtRole: "USER",
+      }),
+    ).rejects.toMatchObject({ statusCode: 403 });
   });
 });

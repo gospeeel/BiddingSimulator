@@ -4,6 +4,8 @@ import type { AppEnv } from "../../config/env.js";
 import {
   authResponseSchema,
   authUserSchema,
+  generateKeyBodySchema,
+  generateKeyResponseSchema,
   loginBodySchema,
   messageResponseSchema,
   registerBodySchema,
@@ -37,6 +39,47 @@ const signAccessToken = async (
 
 export const authRoutes = async (app: FastifyInstance, env: AppEnv) => {
   app.post(
+    "/auth/admin/generate-key",
+    {
+      schema: {
+        tags: ["auth"],
+        summary: "Generate admin invite key",
+        body: generateKeyBodySchema,
+        response: {
+          200: generateKeyResponseSchema,
+          401: messageResponseSchema,
+          403: messageResponseSchema,
+        },
+      },
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: "1 minute",
+        },
+      },
+    },
+    async (request, reply) => {
+      const body = request.body as { masterKey?: string };
+      let jwtRole: string | undefined;
+
+      try {
+        await request.jwtVerify();
+        const payload = request.user as { role?: string };
+        jwtRole = payload.role;
+      } catch {
+        // No valid JWT, will check masterKey
+      }
+
+      const result = await authService.generateAdminKey(env, {
+        jwtRole,
+        masterKey: body.masterKey,
+      });
+
+      return reply.code(200).send(result);
+    },
+  );
+
+  app.post(
     "/auth/register",
     {
       schema: {
@@ -59,6 +102,7 @@ export const authRoutes = async (app: FastifyInstance, env: AppEnv) => {
         email: string;
         password: string;
         name?: string;
+        adminKey?: string;
       };
 
       const result = await authService.register(app, env, body);

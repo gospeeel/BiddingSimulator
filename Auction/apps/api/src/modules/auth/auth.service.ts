@@ -38,12 +38,18 @@ const generateRefreshToken = () => randomBytes(48).toString("hex");
 const generateSessionFamilyId = () => randomBytes(24).toString("hex");
 const getRefreshExpiryDate = (days: number) =>
   new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+const generateInviteKey = () => `adm_${randomBytes(16).toString("hex")}`;
 
 export const authService = {
   async register(
     _app: FastifyInstance,
     env: AppEnv,
-    input: { email: string; password: string; name?: string },
+    input: {
+      email: string;
+      password: string;
+      name?: string;
+      adminKey?: string;
+    },
   ): Promise<AuthResult> {
     const email = input.email.trim().toLowerCase();
     const existingUser = await authRepository.findUserByEmail(email);
@@ -59,11 +65,25 @@ export const authService = {
       parallelism: 1,
     });
 
+    let role: "USER" | "ADMIN" = "USER";
+    if (input.adminKey) {
+      const inviteKey = await authRepository.findInviteKey(input.adminKey);
+      if (!inviteKey || inviteKey.used) {
+        throw createHttpError(403, "Forbidden");
+      }
+      role = "ADMIN";
+    }
+
     const user = await authRepository.createUser({
       email,
       passwordHash,
       name: input.name?.trim(),
+      role,
     });
+
+    if (input.adminKey && role === "ADMIN") {
+      await authRepository.markInviteKeyUsed(input.adminKey, email);
+    }
 
     const refreshToken = generateRefreshToken();
     const familyId = generateSessionFamilyId();
@@ -79,6 +99,21 @@ export const authService = {
       refreshToken,
       user: toSafeUser(user),
     };
+  },
+
+  async generateAdminKey(
+    env: AppEnv,
+    input: { jwtRole?: string; masterKey?: string },
+  ): Promise<{ key: string }> {
+    if (input.jwtRole !== "ADMIN") {
+      if (!input.masterKey || input.masterKey !== env.ADMIN_MASTER_KEY) {
+        throw createHttpError(403, "Forbidden");
+      }
+    }
+
+    const key = generateInviteKey();
+    await authRepository.createInviteKey(key);
+    return { key };
   },
 
   async login(

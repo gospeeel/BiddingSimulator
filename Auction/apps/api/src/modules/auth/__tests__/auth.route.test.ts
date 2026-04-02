@@ -13,6 +13,7 @@ vi.mock("../auth.service.js", () => ({
     refresh: vi.fn(),
     logout: vi.fn(),
     me: vi.fn(),
+    generateAdminKey: vi.fn(),
   },
 }));
 
@@ -326,5 +327,91 @@ describe("GET /auth/me", () => {
     });
 
     expect(response.statusCode).toBe(401);
+  });
+});
+
+describe("POST /auth/admin/generate-key", () => {
+  it("returns 200 with valid masterKey", async () => {
+    vi.mocked(authService.generateAdminKey).mockResolvedValue({
+      key: "adm_test123",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/admin/generate-key",
+      payload: {
+        masterKey: "some-master-key",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as any;
+    expect(body.key).toBe("adm_test123");
+  });
+
+  it("returns 200 with valid ADMIN JWT", async () => {
+    vi.mocked(authService.generateAdminKey).mockResolvedValue({
+      key: "adm_test456",
+    });
+
+    const token = await app.jwt.sign({
+      sub: "admin-123",
+      email: "admin@example.com",
+      role: "ADMIN",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/admin/generate-key",
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as any;
+    expect(body.key).toBe("adm_test456");
+  });
+
+  it("returns 403 with invalid masterKey", async () => {
+    vi.mocked(authService.generateAdminKey).mockRejectedValue(
+      Object.assign(new Error("Forbidden"), { statusCode: 403 }),
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/admin/generate-key",
+      payload: {
+        masterKey: "wrong-key",
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    const body = response.json() as any;
+    expect(body.message).toBe("Forbidden");
+  });
+
+  it("returns 403 with USER JWT", async () => {
+    vi.mocked(authService.generateAdminKey).mockRejectedValue(
+      Object.assign(new Error("Forbidden"), { statusCode: 403 }),
+    );
+
+    const token = await app.jwt.sign({
+      sub: "user-123",
+      email: "user@example.com",
+      role: "USER",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/admin/generate-key",
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(403);
   });
 });

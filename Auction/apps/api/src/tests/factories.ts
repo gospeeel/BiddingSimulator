@@ -23,6 +23,15 @@ export type DbRefreshSession = {
   user: DbUser;
 };
 
+export type DbAdminInviteKey = {
+  id: string;
+  key: string;
+  used: boolean;
+  usedBy: string | null;
+  createdAt: Date;
+  usedAt: Date | null;
+};
+
 export const dbUser = (overrides: Partial<DbUser> = {}): DbUser => ({
   id: "user-123",
   email: "test@example.com",
@@ -49,5 +58,17 @@ export const dbRefreshSession = (
   createdAt: new Date(),
   updatedAt: new Date(),
   user: dbUser(),
+  ...overrides,
+});
+
+export const dbAdminInviteKey = (
+  overrides: Partial<DbAdminInviteKey> = {},
+): DbAdminInviteKey => ({
+  id: "invite-key-123",
+  key: "adm_valid-key-for-testing",
+  used: false,
+  usedBy: null,
+  createdAt: new Date("2024-01-01"),
+  usedAt: null,
   ...overrides,
 });
