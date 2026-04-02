@@ -2,11 +2,10 @@
   "extends": "../../packages/tsconfig/base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "target": "ES2022",
-    "types": ["node"]
+    "types": ["node", "vitest/globals"]
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "vitest.config.mts"]
 }

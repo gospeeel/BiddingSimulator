@@ -8,7 +8,8 @@
     "lint:staged": "lint-staged",
     "commitlint": "commitlint --edit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "prepare": "husky"
   },
   "lint-staged": {
     "apps/web/**/*.{js,ts,vue}": [
@@ -16,7 +17,6 @@
       "pnpm exec prettier --write"
     ],
     "apps/api/**/*.{js,ts}": [
-      "pnpm --filter api exec eslint --fix",
       "pnpm exec prettier --write"
     ],
     "*.{json,md,yml,yaml}": [
@@ -26,6 +26,8 @@
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.2.5",
     "turbo": "^2.8.21"
   },
