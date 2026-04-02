@@ -4,6 +4,7 @@ import { authRepository } from "../auth.repository.js";
 import argon2 from "argon2";
 import type { FastifyInstance } from "fastify";
 import type { AppEnv } from "../../../config/env.js";
+import { dbUser, dbRefreshSession } from "../../../tests/factories.js";
 
 vi.mock("../auth.repository.js", () => ({
   authRepository: {
@@ -40,16 +41,7 @@ const mockEnv: AppEnv = {
   CORS_ORIGIN: ["http://localhost:3001"],
 };
 
-const mockUser = {
-  id: "user-123",
-  email: "test@example.com",
-  name: "Test User",
-  role: "USER" as const,
-  isEmailVerified: false,
-  passwordHash: "hashed",
-  createdAt: new Date("2024-01-01"),
-  updatedAt: new Date("2024-01-01"),
-};
+const testUser = dbUser();
 
 describe("authService.register", () => {
   beforeEach(() => {
@@ -58,10 +50,10 @@ describe("authService.register", () => {
 
   it("creates user with valid input", async () => {
     vi.mocked(authRepository.findUserByEmail).mockResolvedValue(null);
-    vi.mocked(authRepository.createUser).mockResolvedValue(mockUser);
-    vi.mocked(authRepository.createRefreshSession).mockResolvedValue({
-      id: "session-123",
-    });
+    vi.mocked(authRepository.createUser).mockResolvedValue(testUser);
+    vi.mocked(authRepository.createRefreshSession).mockResolvedValue(
+      dbRefreshSession(),
+    );
 
     const result = await authService.register(mockApp, mockEnv, {
       email: "TEST@Example.com",
@@ -85,14 +77,12 @@ describe("authService.register", () => {
   });
 
   it("creates user without name", async () => {
+    const userWithoutName = dbUser({ name: null });
     vi.mocked(authRepository.findUserByEmail).mockResolvedValue(null);
-    vi.mocked(authRepository.createUser).mockResolvedValue({
-      ...mockUser,
-      name: null,
-    });
-    vi.mocked(authRepository.createRefreshSession).mockResolvedValue({
-      id: "session-123",
-    });
+    vi.mocked(authRepository.createUser).mockResolvedValue(userWithoutName);
+    vi.mocked(authRepository.createRefreshSession).mockResolvedValue(
+      dbRefreshSession(),
+    );
 
     const result = await authService.register(mockApp, mockEnv, {
       email: "test@example.com",
@@ -108,7 +98,7 @@ describe("authService.register", () => {
   });
 
   it("throws 409 when user already exists", async () => {
-    vi.mocked(authRepository.findUserByEmail).mockResolvedValue(mockUser);
+    vi.mocked(authRepository.findUserByEmail).mockResolvedValue(testUser);
 
     await expect(
       authService.register(mockApp, mockEnv, {
@@ -132,11 +122,11 @@ describe("authService.login", () => {
   });
 
   it("logs in with valid credentials", async () => {
-    vi.mocked(authRepository.findUserByEmail).mockResolvedValue(mockUser);
+    vi.mocked(authRepository.findUserByEmail).mockResolvedValue(testUser);
     vi.mocked(argon2.verify).mockResolvedValue(true);
-    vi.mocked(authRepository.createRefreshSession).mockResolvedValue({
-      id: "session-123",
-    });
+    vi.mocked(authRepository.createRefreshSession).mockResolvedValue(
+      dbRefreshSession(),
+    );
 
     const result = await authService.login(mockApp, mockEnv, {
       email: "TEST@Example.com",
@@ -170,7 +160,7 @@ describe("authService.login", () => {
   });
 
   it("throws 401 when password is invalid", async () => {
-    vi.mocked(authRepository.findUserByEmail).mockResolvedValue(mockUser);
+    vi.mocked(authRepository.findUserByEmail).mockResolvedValue(testUser);
     vi.mocked(argon2.verify).mockResolvedValue(false);
 
     await expect(
@@ -195,26 +185,18 @@ describe("authService.refresh", () => {
   });
 
   it("refreshes token with valid session", async () => {
-    const session = {
-      ...mockUser,
-      id: "session-123",
-      familyId: "family-123",
-      tokenHash: "old-hash",
-      expiresAt: new Date(Date.now() + 86400000),
-      revokedAt: null,
-      user: mockUser,
-    };
+    const session = dbRefreshSession({ user: testUser });
     vi.mocked(authRepository.findRefreshSessionByTokenHash).mockResolvedValue(
-      session as any,
+      session,
     );
-    vi.mocked(authRepository.rotateRefreshSession).mockResolvedValue({
-      id: "new-session",
-    });
+    vi.mocked(authRepository.rotateRefreshSession).mockResolvedValue(
+      dbRefreshSession(),
+    );
 
     const result = await authService.refresh(mockApp, mockEnv, "valid-token");
 
     expect(authRepository.rotateRefreshSession).toHaveBeenCalled();
-    expect(result.user.id).toBe(mockUser.id);
+    expect(result.user.id).toBe(testUser.id);
     expect(result.refreshToken).toBeDefined();
     expect(result.refreshToken).not.toBe("valid-token");
   });
@@ -234,16 +216,12 @@ describe("authService.refresh", () => {
   });
 
   it("throws 401 when session is revoked (reuse detection)", async () => {
-    const session = {
-      id: "session-123",
-      familyId: "family-123",
-      tokenHash: "old-hash",
-      expiresAt: new Date(Date.now() + 86400000),
+    const session = dbRefreshSession({
       revokedAt: new Date(),
-      user: mockUser,
-    };
+      user: testUser,
+    });
     vi.mocked(authRepository.findRefreshSessionByTokenHash).mockResolvedValue(
-      session as any,
+      session,
     );
 
     await expect(
@@ -256,16 +234,12 @@ describe("authService.refresh", () => {
   });
 
   it("throws 401 when session is expired", async () => {
-    const session = {
-      id: "session-123",
-      familyId: "family-123",
-      tokenHash: "old-hash",
+    const session = dbRefreshSession({
       expiresAt: new Date(Date.now() - 86400000),
-      revokedAt: null,
-      user: mockUser,
-    };
+      user: testUser,
+    });
     vi.mocked(authRepository.findRefreshSessionByTokenHash).mockResolvedValue(
-      session as any,
+      session,
     );
 
     await expect(
@@ -284,12 +258,9 @@ describe("authService.logout", () => {
   });
 
   it("revokes session on logout", async () => {
-    const session = {
-      id: "session-123",
-      revokedAt: null,
-    };
+    const session = dbRefreshSession({ revokedAt: null });
     vi.mocked(authRepository.findRefreshSessionByTokenHash).mockResolvedValue(
-      session as any,
+      session,
     );
 
     await authService.logout(mockApp, "valid-token");
@@ -306,10 +277,9 @@ describe("authService.logout", () => {
   });
 
   it("does nothing when session already revoked", async () => {
-    vi.mocked(authRepository.findRefreshSessionByTokenHash).mockResolvedValue({
-      id: "session-123",
-      revokedAt: new Date(),
-    } as any);
+    vi.mocked(authRepository.findRefreshSessionByTokenHash).mockResolvedValue(
+      dbRefreshSession({ revokedAt: new Date() }),
+    );
 
     await authService.logout(mockApp, "revoked-token");
 
@@ -333,7 +303,7 @@ describe("authService.me", () => {
   });
 
   it("returns safe user data", async () => {
-    vi.mocked(authRepository.findUserById).mockResolvedValue(mockUser);
+    vi.mocked(authRepository.findUserById).mockResolvedValue(testUser);
 
     const result = await authService.me(mockApp, "user-123");
 

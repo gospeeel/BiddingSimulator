@@ -1,1 +1,1 @@
-cd Auction && pnpm --filter api test
+cd Auction && pnpm --filter api exec tsc --noEmit && pnpm --filter api test
