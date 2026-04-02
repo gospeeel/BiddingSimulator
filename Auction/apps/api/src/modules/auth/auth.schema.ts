@@ -34,6 +34,7 @@ export const registerBodySchema = {
     email: { type: "string", format: "email" },
     password: { type: "string", minLength: 1, maxLength: 128 },
     name: { type: "string", minLength: 1, maxLength: 100 },
+    adminKey: { type: "string", minLength: 1 },
   },
   required: ["email", "password"],
   additionalProperties: false,
@@ -64,4 +65,20 @@ export const messageResponseSchema = {
     message: { type: "string" },
   },
   required: ["message"],
+} as const;
+
+export const generateKeyBodySchema = {
+  type: "object",
+  properties: {
+    masterKey: { type: "string", minLength: 1 },
+  },
+  additionalProperties: false,
+} as const;
+
+export const generateKeyResponseSchema = {
+  type: "object",
+  properties: {
+    key: { type: "string" },
+  },
+  required: ["key"],
 } as const;

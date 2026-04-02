@@ -37,6 +37,14 @@ model RefreshSession {
   @@index([expiresAt])
 }
 
+model AdminInviteKey {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  used      Boolean  @default(false)
+  usedBy    String?
+  createdAt DateTime @default(now())
+  usedAt    DateTime?
+}
 
 enum UserRole {
   USER

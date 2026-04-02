@@ -14,6 +14,7 @@ const envSchema = z.object({
   JWT_ACCESS_TTL: z.string().default("15m"),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   COOKIE_SECURE: z.coerce.boolean().default(false),
+  ADMIN_MASTER_KEY: z.string().min(1).optional(),
 });
 
 export type AppEnv = {
@@ -26,6 +27,7 @@ export type AppEnv = {
   JWT_ACCESS_TTL: string;
   REFRESH_TOKEN_TTL_DAYS: number;
   COOKIE_SECURE: boolean;
+  ADMIN_MASTER_KEY?: string;
 };
 
 export const getEnv = (): AppEnv => {
@@ -34,5 +36,6 @@ export const getEnv = (): AppEnv => {
   return {
     ...parsed,
     CORS_ORIGIN: parsed.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
+    ADMIN_MASTER_KEY: parsed.ADMIN_MASTER_KEY,
   };
 };
