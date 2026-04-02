@@ -13,9 +13,17 @@ export const authRepository = {
     });
   },
 
-  createUser(data: { email: string; passwordHash: string; name?: string }) {
+  createUser(data: {
+    email: string;
+    passwordHash: string;
+    name?: string;
+    role?: "USER" | "ADMIN";
+  }) {
     return prisma.user.create({
-      data,
+      data: {
+        ...data,
+        role: data.role ?? "USER",
+      },
     });
   },
 
@@ -81,6 +89,26 @@ export const authRepository = {
           expiresAt: data.expiresAt,
         },
       });
+    });
+  },
+
+  // AdminInviteKey methods
+  createInviteKey(key: string) {
+    return prisma.adminInviteKey.create({
+      data: { key },
+    });
+  },
+
+  findInviteKey(key: string) {
+    return prisma.adminInviteKey.findUnique({
+      where: { key },
+    });
+  },
+
+  markInviteKeyUsed(key: string, usedBy: string) {
+    return prisma.adminInviteKey.update({
+      where: { key },
+      data: { used: true, usedBy, usedAt: new Date() },
     });
   },
 };
